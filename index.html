@@ -382,9 +382,31 @@
         
         function initializeFirebase() {
             try {
-                // Configuración de Firebase (inyectada por el entorno)
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'oral-exam-sim';
+              // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAVbIeEAHBfKU5eDqsELTyXkAcM-m5qUUM",
+  authDomain: "simulador-examen-oral.firebaseapp.com",
+  projectId: "simulador-examen-oral",
+  storageBucket: "simulador-examen-oral.firebasestorage.app",
+  messagingSenderId: "64722873532",
+  appId: "1:64722873532:web:2f708ee4a62366598c34b9"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+                
+                if (firebaseConfig.apiKey === "TU_API_KEY") {
+                    showModal("Error de configuración: No has introducido tu configuración de Firebase en el archivo HTML. La app no funcionará.");
+                    return;
+                }
+
+                // Usamos el ID del proyecto como App ID, o puedes poner un string fijo
+                appId = firebaseConfig.projectId || 'oral-exam-sim';
 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -421,13 +443,11 @@
             });
 
             try {
-                // Intentar autenticación con token (entorno de producción)
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    // Fallback a autenticación anónima (desarrollo)
-                    await signInAnonymously(auth);
-                }
+                // --- INICIO DE LA MODIFICACIÓN ---
+                // Como no estamos en el entorno de la plataforma,
+                // solo usamos la autenticación anónima.
+                await signInAnonymously(auth);
+                // --- FIN DE LA MODIFICACIÓN ---
             } catch (error) {
                 console.error("Error de autenticación:", error);
                 showModal("Error de autenticación. No podrás guardar ni cargar material.");
@@ -1310,24 +1330,8 @@
         }
 
         // --- INICIAR LA APLICACIÓN ---
-      // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+        initializeFirebase();
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyAVbIeEAHBfKU5eDqsELTyXkAcM-m5qUUM",
-  authDomain: "simulador-examen-oral.firebaseapp.com",
-  projectId: "simulador-examen-oral",
-  storageBucket: "simulador-examen-oral.firebasestorage.app",
-  messagingSenderId: "64722873532",
-  appId: "1:64722873532:web:2f708ee4a62366598c34b9"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
     </script>
 </body>
 </html>
-
