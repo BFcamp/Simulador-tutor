@@ -362,14 +362,14 @@
             getDoc, 
             setDoc, 
             setLogLevel,
-            collection, // <- Nuevo
-            addDoc,     // <- Nuevo
-            serverTimestamp, // <- Nuevo
-            query,      // <- Nuevo
-            onSnapshot, // <- Nuevo
-            deleteDoc,   // <- Nuevo
-            updateDoc,   // <- Nuevo
-            getDocs     // <- Nuevo
+            collection,
+            addDoc,
+            serverTimestamp,
+            query,
+            onSnapshot,
+            deleteDoc,
+            updateDoc,
+            getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
  
         // --- VARIABLES GLOBALES ---
@@ -384,13 +384,13 @@
             'tab-material': document.getElementById('tab-material-btn'),
             'tab-simulador': document.getElementById('tab-simulador-btn'),
             'tab-ranking': document.getElementById('tab-ranking-btn'),
-            'tab-review': document.getElementById('tab-review-btn'), // <- Nuevo
+            'tab-review': document.getElementById('tab-review-btn'),
         };
         const tabPanels = {
             'tab-material': document.getElementById('tab-material'),
             'tab-simulador': document.getElementById('tab-simulador'),
             'tab-ranking': document.getElementById('tab-ranking'),
-            'tab-review': document.getElementById('tab-review'), // <- Nuevo
+            'tab-review': document.getElementById('tab-review'),
         };
         
         // Pestaña Material
@@ -431,7 +431,6 @@
         
         function initializeFirebase() {
             try {
-                // --- INICIO DE LA MODIFICACIÓN (Corregido con tu config) ---
                 // Esta es la configuración de tu proyecto de Firebase
                 const firebaseConfig = {
                   apiKey: "AIzaSyAVbIeEAHBfKU5eDqsELTyXkAcM-m5qUUM",
@@ -441,7 +440,6 @@
                   messagingSenderId: "64722873532",
                   appId: "1:64722873532:web:2f708ee4a62366598c34b9"
                 };
-                // --- FIN DE LA MODIFICACIÓN ---
                 
                 if (firebaseConfig.apiKey === "TU_API_KEY") {
                     showModal("Error de configuración: No has introducido tu configuración de Firebase en el archivo HTML. La app no funcionará.");
@@ -498,11 +496,9 @@
             });
 
             try {
-                // --- INICIO DE LA MODIFICACIÓN ---
                 // Para GitHub Pages, SIEMPRE usamos autenticación anónima.
                 // Esto es solo para cumplir la regla de seguridad "request.auth != null".
                 await signInAnonymously(auth);
-                // --- FIN DE LA MODIFICACIÓN ---
             } catch (error) {
                 console.error("Error de autenticación:", error);
                 showModal("Error de autenticación. La app no funcionará.");
@@ -551,23 +547,6 @@
             // NUEVO: Listeners de Materia
             addSubjectBtn.addEventListener('click', handleAddSubject);
             subjectSelector.addEventListener('change', handleSubjectChange);
-
-            // NUEVO: Listeners del Modal de Sincronización
-            document.getElementById('save-sync-id').addEventListener('click', () => {
-                const inputId = document.getElementById('sync-id-input').value.trim();
-                if (inputId) {
-                    localStorage.setItem('my_sync_userId', inputId);
-                    window.location.reload(); // Recargar para aplicar el ID
-                } else {
-                    showModal("Por favor, introduce un ID válido.");
-                }
-            });
-            
-            document.getElementById('generate-sync-id').addEventListener('click', () => {
-                const newId = crypto.randomUUID(); // Genera un ID único
-                localStorage.setItem('my_sync_userId', newId);
-                window.location.reload(); // Recargar para aplicar el ID
-            });
             
             // Pestaña Material
             saveMaterialBtn.addEventListener('click', handleSaveMaterial);
@@ -605,7 +584,7 @@
             });
         }
         
-        // --- NUEVAS FUNCIONES PARA MANEJO DE MATERIAS (Faltaban en tu código) ---
+        // --- NUEVAS FUNCIONES PARA MANEJO DE MATERIAS ---
 
         /**
          * Carga la lista de materias del usuario desde Firestore.
@@ -719,24 +698,19 @@
                 showModal("Usuario no autenticado. No se puede operar.");
                 return null;
             }
-            // --- MODIFICACIÓN (Corregido error de ruta) ---
             if (!currentSubject) {
-                // No mostramos modal, solo prevenimos la acción
                 console.warn("Intento de acceso a material sin materia seleccionada.");
                 return null;
             }
             // La ruta ahora incluye la materia
             return doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'materials', materialType);
-            // --- FIN MODIFICACIÓN ---
         }
 
         async function handleSaveMaterial() {
-            // --- NUEVO CHECK (Corregido) ---
             if (!currentSubject) {
                 showModal("Por favor, selecciona o crea una materia primero.");
                 return;
             }
-            // --- FIN CHECK ---
             saveStatus.textContent = "Guardando...";
             saveMaterialBtn.disabled = true;
 
@@ -767,12 +741,10 @@
         }
         
         async function loadMaterialFromFirestore() {
-            // --- NUEVO CHECK (Corregido) ---
             if (!currentSubject) {
                 clearMaterialUI();
                 return;
             }
-            // --- FIN CHECK ---
             try {
                 const materialsToLoad = [
                     { id: 'syllabus', element: syllabusText },
@@ -788,7 +760,6 @@
                     if (docSnap.exists()) {
                         mat.element.value = docSnap.data().content || "";
                     } else {
-                        // Si no existe, asegurarse de que la caja esté vacía
                         mat.element.value = "";
                     }
                 }
@@ -799,7 +770,6 @@
         }
 
         async function getAllMaterials() {
-            // ... (Sin cambios, esta función es la misma)
             let materials = {
                 syllabus: "",
                 theory: "",
@@ -836,12 +806,7 @@
         // --- LÓGICA DE IA (GEMINI API) ---
         
         async function callGemini(systemPrompt, userQuery, generationConfig = null) {
-            // --- MODIFICACIÓN ---
-            // La API key se inyecta automáticamente en este entorno.
-            // Se elimina la clave hardcodeada.
-            const apiKey = ""; 
-            // --- FIN DE LA MODIFICACIÓN ---
-            
+            const apiKey = ""; // Inyectada automáticamente
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -876,7 +841,6 @@
                             throw new Error("Respuesta de la IA inválida o vacía.");
                         }
                     } else {
-                        // Si la respuesta no es OK, intentar de nuevo con backoff
                         const errorText = await response.text();
                         console.error(`Error ${response.status}: ${errorText}`);
                         throw new Error(`Error ${response.status}: ${errorText}`);
@@ -894,7 +858,6 @@
         }
 
         // --- FUNCIONES DE TTS (TEXT-TO-SPEECH) ---
-        // ... (Sin cambios, estas funciones son las mismas)
         async function callGeminiTTS(textToSpeak) {
             const apiKey = ""; // Inyectada automáticamente
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
@@ -999,7 +962,6 @@
         // --- FUNCIÓN PARA OBTENER RESPUESTA DE IA ---
         
         async function getAnswerForQuestion(question, materials) {
-            // ... (Sin cambios, esta función es la misma)
             const systemPrompt = "Eres un profesor experto. Responde la siguiente pregunta de examen de forma concisa y directa, basándote en el material de estudio proporcionado. La respuesta debe ser ideal para un examen oral.";
             const userQuery = `
                 Material de Estudio (Contexto):
@@ -1029,7 +991,6 @@
         // --- MANEJADORES DE EVENTOS PRINCIPALES ---
         
         async function handleGenerateExam() {
-            // ... (Sin cambios, esta función es la misma)
             examLoader.style.display = 'block';
             generateExamBtn.disabled = true;
             examOutput.innerHTML = "<p>Generando preguntas... Esto puede tardar un momento.</p>";
@@ -1041,7 +1002,6 @@
                 return;
             }
             
-            // --- MODIFICACIÓN: CHECK DE MATERIAL ---
             if (!currentSubject) {
                  showModal("Por favor, selecciona una materia primero.");
                 examLoader.style.display = 'none';
@@ -1049,7 +1009,6 @@
                 examOutput.innerHTML = "<p class='text-gray-500'>Aquí aparecerán las preguntas generadas...</p>";
                 return;
             }
-            // --- FIN MODIFICACIÓN ---
 
             if (!materials.syllabus && !materials.theory && !materials.experiences) {
                 showModal("No hay material cargado para esta materia. Por favor, ve a la pestaña 'Material' y guarda contenido primero.");
@@ -1109,10 +1068,6 @@
             }
         }
 
-        /**
-         * Renderiza la UI del examen con botones de respuesta.
-         * (FUNCIÓN RESTAURADA)
-         */
         function renderExamUI(examData) {
             examOutput.innerHTML = ''; // Limpiar
             if (!examData || examData.length === 0) {
@@ -1164,7 +1119,7 @@
 
                     qContainer.appendChild(qText);
                     qContainer.appendChild(qButton);
-                    qContainer.appendChild(saveButton); // Añadir botón de guardar
+                    qContainer.appendChild(saveButton);
                     qButton.appendChild(loader);
                     qContainer.appendChild(answerTextEl);
                     qContainer.appendChild(audioPlayerContainer);
@@ -1175,10 +1130,6 @@
             });
         }
         
-        /**
-         * Manejador para el clic en un botón "Responder y Escuchar".
-         * (FUNCIÓN RESTAURADA)
-         */
         async function handleAnswerClick(button) {
             const question = button.dataset.question;
             const container = button.closest('.question-item');
@@ -1187,7 +1138,6 @@
             const audioPlayerContainer = container.querySelector('.audio-player-container');
             const saveButton = container.querySelector('.save-btn'); 
 
-            // Deshabilitar botón y mostrar loader
             button.disabled = true;
             loader.style.display = 'inline-block';
             answerTextEl.style.display = 'none';
@@ -1196,26 +1146,21 @@
             saveButton.style.display = 'none'; 
 
             try {
-                // 1. Obtener material (contexto)
                 const materials = await getAllMaterials();
                 if (!materials) throw new Error("No se pudo cargar el material de contexto.");
                 
-                // 2. Generar respuesta de texto
                 answerTextEl.style.display = 'block';
                 const answerText = await getAnswerForQuestion(question, materials);
                 answerTextEl.textContent = answerText;
 
-                // 3. Generar audio de la respuesta
                 answerTextEl.textContent += "\n\nGenerando audio...";
                 const { audioData, mimeType } = await callGeminiTTS(answerText);
                 
-                // 4. Reproducir audio
-                answerTextEl.textContent = answerText; // Restaurar texto limpio
+                answerTextEl.textContent = answerText; 
                 await playAudio(audioData, mimeType, audioPlayerContainer);
 
-                // 5. Mostrar botón de guardar y asignarle la respuesta
                 saveButton.dataset.answer = answerText;
-                saveButton.style.display = 'inline-flex'; // Mostrar botón
+                saveButton.style.display = 'inline-flex'; 
                 saveButton.disabled = false;
                 saveButton.innerHTML = `<svg class="w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0111.186 0zM17.593 3.322c.107.014.215.026.32.04a48.196 48.196 0 00-11.83 0c.105-.014.213-.026.32-.04m11.19 0A48.25 48.25 0 0012 3c-2.755 0-5.459.436-8.093 1.262M12 12v3.75m0-9.75v.01" /></svg>
                         Guardar`;
@@ -1225,7 +1170,6 @@
                 answerTextEl.textContent = `Error: ${error.message}`;
                 answerTextEl.style.display = 'block';
             } finally {
-                // Rehabilitar botón y ocultar loader
                 button.disabled = false;
                 loader.style.display = 'none';
             }
@@ -1233,21 +1177,15 @@
 
         // --- FUNCIONES PARA GUARDAR Y REPASAR ---
 
-        /**
-         * Manejador para el clic en "Guardar".
-         * (FUNCIÓN RESTAURADA)
-         */
         async function handleSaveClick(button) {
             const topic = button.dataset.topic;
             const question = button.dataset.question;
             const answer = button.dataset.answer;
 
-            // --- NUEVO CHECK ---
             if (!currentSubject) {
                 showModal("Por favor, selecciona una materia antes de guardar.");
                 return;
             }
-            // --- FIN CHECK ---
 
             if (!topic || !question || !answer) {
                 showModal("Error: no se pudo obtener la información para guardar.");
@@ -1258,23 +1196,18 @@
             button.innerHTML = "Guardando...";
 
             try {
-                // Referencia a la nueva colección
-                // --- MODIFICACIÓN DE RUTA ---
                 const savedQuestionsRef = collection(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions');
-                // --- FIN MODIFICACIÓN ---
                 
                 await addDoc(savedQuestionsRef, {
                     topic: topic,
                     question: question,
                     answer: answer,
-                    createdAt: serverTimestamp(), // Marcar tiempo para ordenar
-                    reviewStep: 0, // Nuevo: Nivel de Anki
-                    nextReviewDate: serverTimestamp() // Nuevo: Repasar ahora
+                    createdAt: serverTimestamp(),
+                    reviewStep: 0,
+                    nextReviewDate: serverTimestamp()
                 });
 
                 button.innerHTML = "¡Guardado!";
-                // El botón permanecerá deshabilitado para evitar duplicados,
-                // el listener de onSnapshot actualizará la pestaña "Repasar"
 
             } catch (error) {
                 console.error("Error al guardar Q&A:", error);
@@ -1284,26 +1217,19 @@
             }
         }
 
-        /**
-         * MODIFICADO para filtrar por fecha y mostrar contadores.
-         */
         function setupSavedQuestionsListener() {
             if (savedQuestionsUnsubscribe) {
-                savedQuestionsUnsubscribe(); // Detener listener anterior si existe
+                savedQuestionsUnsubscribe(); 
             }
-            // --- MODIFICACIÓN (Corregida) ---
             if (!userId || !currentSubject) {
                 clearReviewUI();
                 return;
             }
-            // --- FIN MODIFICACIÓN ---
 
             reviewLoader.style.display = 'block';
             reviewOutput.innerHTML = '';
 
-            // --- MODIFICACIÓN DE RUTA (Corregida) ---
             const q = query(collection(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions'));
-            // --- FIN MODIFICACIÓN DE RUTA ---
             
             savedQuestionsUnsubscribe = onSnapshot(q, (snapshot) => {
                 reviewLoader.style.display = 'none';
@@ -1311,17 +1237,14 @@
                 const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const now = new Date();
 
-                // Filtrar las que se deben repasar hoy
                 const dueDocs = docs.filter(doc => {
                     return doc.nextReviewDate && doc.nextReviewDate.toDate() <= now;
                 });
                 
-                // Ordenar por fecha de repaso (las más antiguas primero)
                 dueDocs.sort((a, b) => (a.nextReviewDate?.toMillis() || 0) - (b.nextReviewDate?.toMillis() || 0));
 
                 const futureDocsCount = docs.length - dueDocs.length;
                 
-                // Actualizar contadores
                 reviewDueCount.textContent = dueDocs.length;
                 reviewFutureCount.textContent = futureDocsCount;
 
@@ -1330,34 +1253,27 @@
                     return;
                 }
                 
-                // Agrupar por tema
                 const groupedByTopic = dueDocs.reduce((acc, doc) => {
                     const topic = doc.topic || 'Sin Tema';
                     if (!acc[topic]) {
                         acc[topic] = [];
                     }
-                    acc[topic].push(doc); // <-- CORRECCIÓN
-                    return acc; // <-- CORRECCIÓN
-                }, {}); // <-- CORRECCIÓN
+                    acc[topic].push(doc); 
+                    return acc; 
+                }, {}); 
 
-                // Renderizar
-                renderSavedQuestions(groupedByTopic); // <-- CORRECCIÓN
+                renderSavedQuestions(groupedByTopic);
 
-            }, (error) => { // <-- CORRECCIÓN
+            }, (error) => { 
                 console.error("Error en listener de 'Repasar':", error);
                 reviewLoader.style.display = 'none';
                 reviewOutput.innerHTML = '<p class="text-red-500">Error al cargar las preguntas guardadas.</p>';
              });
          }
 
-        /**
-         * Renderiza las preguntas guardadas y agrupadas en la pestaña "Repasar".
-         * MODIFICADO para el estilo Anki (respuesta oculta, botones).
-         */
         function renderSavedQuestions(groupedByTopic) {
             reviewOutput.innerHTML = '';
             
-            // Ordenar temas alfabéticamente
             const sortedTopics = Object.keys(groupedByTopic).sort();
 
             for (const topic of sortedTopics) {
@@ -1372,7 +1288,7 @@
                 groupedByTopic[topic].forEach(doc => {
                     const card = document.createElement('div');
                     card.className = 'qa-card';
-                    card.dataset.id = doc.id; // Guardar ID en la tarjeta
+                    card.dataset.id = doc.id;
                     
                     const deleteBtn = document.createElement('button');
                     deleteBtn.className = 'delete-qa-btn';
@@ -1387,7 +1303,6 @@
                     answerP.className = 'answer';
                     answerP.textContent = doc.answer;
                     
-                    // --- Nuevo: UI de Anki ---
                     const showAnswerBtn = document.createElement('button');
                     showAnswerBtn.className = 'show-answer-btn';
                     showAnswerBtn.textContent = 'Mostrar Respuesta';
@@ -1399,13 +1314,12 @@
                         <button class="rate-btn" data-rating="good" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Bien</button>
                         <button class="rate-btn" data-rating="easy" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Fácil</button>
                     `;
-                    // --- Fin de UI de Anki ---
 
                     card.appendChild(deleteBtn);
                     card.appendChild(questionP);
-                    card.appendChild(answerP); // La respuesta (oculta por CSS)
-                    card.appendChild(ratingControls); // Controles (ocultos por CSS)
-                    card.appendChild(showAnswerBtn); // Botón para mostrar
+                    card.appendChild(answerP); 
+                    card.appendChild(ratingControls);
+                    card.appendChild(showAnswerBtn); 
                     topicGroupEl.appendChild(card);
                 });
 
@@ -1413,11 +1327,6 @@
             }
         }
 
-        // --- FUNCIONES DE REPASO FALTANTES (Añadidas de nuevo) ---
-
-        /**
-         * Manejador para borrar una Q&A guardada.
-         */
         async function handleDeleteClick(button) {
             const id = button.dataset.id;
             if (!id) return;
@@ -1425,55 +1334,42 @@
             button.disabled = true;
             
             try {
-                // --- MODIFICACIÓN DE RUTA ---
                 const docRef = doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions', id);
-                // --- FIN MODIFICACIÓN ---
                 await deleteDoc(docRef);
-                // El listener onSnapshot se encargará de actualizar la UI
             } catch (error) {
                 console.error("Error al borrar Q&A:", error);
                 showModal(`No se pudo borrar la pregunta: ${error.message}`);
-                button.disabled = false; // Permitir reintento
+                button.disabled = false;
             }
         }
 
-        /**
-         * NUEVO: Manejador para el botón "Mostrar Respuesta".
-         */
         function handleShowAnswerClick(button) {
             const card = button.closest('.qa-card');
             if (!card) return;
 
             card.querySelector('.answer').style.display = 'block';
             card.querySelector('.rating-controls').style.display = 'grid';
-            button.style.display = 'none'; // Ocultar el botón "Mostrar Respuesta"
+            button.style.display = 'none';
         }
 
-        /**
-         * NUEVO: Lógica de SRS (Spaced Repetition).
-         * Calcula el siguiente intervalo.
-         */
         function getNextReview(currentStep, rating) {
-            // [Nuevo, 1d, 3d, 7d, 15d, 30d, 60d]
             const intervals = [1, 3, 7, 15, 30, 60, 120]; 
             let nextStep;
 
             if (rating === 'hard') {
-                nextStep = 0; // Se reinicia
+                nextStep = 0;
             } else if (rating === 'good') {
                 nextStep = currentStep + 1;
             } else { // easy
-                nextStep = currentStep + 2; // Salta un nivel
+                nextStep = currentStep + 2;
             }
 
             const now = new Date();
             let nextReviewDate = new Date();
 
             if (nextStep === 0) {
-                // Si es "Difícil", volver a mostrar en 10 minutos
                 nextReviewDate.setMinutes(now.getMinutes() + 10);
             } else {
-                // Obtener días del intervalo
                 const daysToAdd = intervals[Math.min(nextStep - 1, intervals.length - 1)];
                 nextReviewDate.setDate(now.getDate() + daysToAdd);
             }
@@ -1481,9 +1377,6 @@
             return { nextStep, nextReviewDate };
         }
 
-        /**
-         * NUEVO: Manejador para los botones de dificultad (Difícil, Bien, Fácil).
-         */
         async function handleRateClick(button) {
             const id = button.dataset.id;
             const rating = button.dataset.rating;
@@ -1492,35 +1385,25 @@
 
             if (!id || !rating) return;
             
-            // Deshabilitar toda la tarjeta mientras se procesa
             card.style.opacity = '0.5';
 
             try {
-                // 1. Calcular nueva fecha de repaso
                 const { nextStep, nextReviewDate } = getNextReview(currentStep, rating);
                 
-                // 2. Actualizar el documento en Firestore
-                // --- MODIFICACIÓN DE RUTA ---
                 const docRef = doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions', id);
-                // --- FIN MODIFICACIÓN ---
                 await updateDoc(docRef, {
                     reviewStep: nextStep,
-                    nextReviewDate: nextReviewDate // Firestore maneja la conversión de Date a Timestamp
+                    nextReviewDate: nextReviewDate
                 });
-
-                // 3. ¡Listo! El listener onSnapshot detectará este cambio
-                // y automáticamente quitará la tarjeta de la lista de "Repasar Hoy".
-                // No necesitamos quitarla manualmente.
 
             } catch (error) {
                 console.error("Error al actualizar la tarjeta de repaso:", error);
                 showModal(`Error al guardar tu progreso: ${error.message}`);
-                card.style.opacity = '1'; // Restaurar opacidad si falla
+                card.style.opacity = '1';
             }
         }
         
          async function handleGenerateRanking() {
-            // ... (Sin cambios, esta función es la misma)
             rankingLoader.style.display = 'block';
             generateRankingBtn.disabled = true;
             rankingOutput.textContent = "Analizando experiencias...";
@@ -1532,7 +1415,6 @@
                 return;
             }
 
-            // --- MODIFICACIÓN: CHECK DE MATERIAL ---
             if (!currentSubject) {
                  showModal("Por favor, selecciona una materia primero.");
                 rankingLoader.style.display = 'none';
@@ -1540,7 +1422,6 @@
                 rankingOutput.innerHTML = '<p class="text-gray-500">Aquí aparecerá el ranking de temas...</p>';
                 return;
             }
-            // --- FIN MODIFICACIÓN ---
 
             if (!materials.experiences) {
                 showModal("No se han cargado 'Experiencias de Exámenes' para esta materia. Esta función necesita ese material para analizar las frecuencias.");
@@ -1568,8 +1449,7 @@
             try {
                 const result = await callGemini(systemPrompt, userQuery);
                 rankingOutput.textContent = result;
-            } catch (error)
-                {
+            } catch (error) {
                 console.error("Error al generar ranking:", error);
                 showModal(`Error al comunicarse con la IA: ${error.message}`);
                 rankingOutput.textContent = "Ocurrió un error al generar el ranking.";
@@ -1581,6 +1461,24 @@
 
         // --- INICIAR LA APLICACIÓN ---
         initializeFirebase();
+
+        // --- LISTENERS DEL MODAL DE SINCRONIZACIÓN (¡CORREGIDO!) ---
+        // Estos listeners deben estar activos SIEMPRE, no solo después del login.
+        document.getElementById('save-sync-id').addEventListener('click', () => {
+            const inputId = document.getElementById('sync-id-input').value.trim();
+            if (inputId) {
+                localStorage.setItem('my_sync_userId', inputId);
+                window.location.reload(); // Recargar para aplicar el ID
+            } else {
+                showModal("Por favor, introduce un ID válido.");
+            }
+        });
+        
+        document.getElementById('generate-sync-id').addEventListener('click', () => {
+            const newId = crypto.randomUUID(); // Genera un ID único
+            localStorage.setItem('my_sync_userId', newId);
+            window.location.reload(); // Recargar para aplicar el ID
+        });
 
     </script>
 </body>
