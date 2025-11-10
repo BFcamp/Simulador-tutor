@@ -368,18 +368,15 @@
             query,      // <- Nuevo
             onSnapshot, // <- Nuevo
             deleteDoc,   // <- Nuevo
--            updateDoc   // <- Nuevo
-+            updateDoc,   // <- Nuevo
-+            getDocs     // <- Nuevo
+            updateDoc,   // <- Nuevo
+            getDocs     // <- Nuevo
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
  
         // --- VARIABLES GLOBALES ---
--        let db, auth, appId, userId;
--        let currentTab = 'tab-material';
-+        let db, auth, appId, userId;
-+        let currentTab = 'tab-material';
-+        let currentSubject = ''; // NUEVO: Materia seleccionada
-+        let allSubjects = new Set(); // NUEVO: Lista de materias
+        let db, auth, appId, userId;
+        let currentTab = 'tab-material';
+        let currentSubject = ''; // NUEVO: Materia seleccionada
+        let allSubjects = new Set(); // NUEVO: Lista de materias
         let savedQuestionsUnsubscribe = null; // Para el listener de onSnapshot
  
         // --- ELEMENTOS DEL DOM ---
@@ -422,9 +419,9 @@
         const reviewFutureCount = document.getElementById('review-future-count');
  
         // General
-+        const subjectSelector = document.getElementById('subject-selector'); // NUEVO
-+        const newSubjectName = document.getElementById('new-subject-name'); // NUEVO
-+        const addSubjectBtn = document.getElementById('add-subject-btn'); // NUEVO
+        const subjectSelector = document.getElementById('subject-selector'); // NUEVO
+        const newSubjectName = document.getElementById('new-subject-name'); // NUEVO
+        const addSubjectBtn = document.getElementById('add-subject-btn'); // NUEVO
         const userIdSpan = document.getElementById('user-id');
         const errorModal = document.getElementById('error-modal');
         const errorMessage = document.getElementById('error-message');
@@ -512,7 +509,38 @@
             }
         }
 
+        // --- LÓGICA DE UI (PESTAÑAS Y MODAL) ---
+
         function switchTab(newTabId) {
+            currentTab = newTabId;
+            
+            Object.keys(tabButtons).forEach(tabId => {
+                const btn = tabButtons[tabId];
+                const panel = tabPanels[tabId];
+                
+                if (tabId === newTabId) {
+                    btn.classList.add('active');
+                    panel.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                    panel.classList.remove('active');
+                }
+            });
+        }
+
+        function showModal(message) {
+            errorMessage.textContent = message;
+            errorModal.style.display = 'flex';
+            setTimeout(() => errorModal.style.opacity = 1, 10);
+        }
+
+        function hideModal() {
+            errorModal.style.opacity = 0;
+            setTimeout(() => errorModal.style.display = 'none', 300);
+        }
+
+        function setupUIListeners() {
+            // Navegación de pestañas
             Object.keys(tabButtons).forEach(tabId => {
                 tabButtons[tabId].addEventListener('click', () => switchTab(tabId));
             });
@@ -759,6 +787,9 @@
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                         mat.element.value = docSnap.data().content || "";
+                    } else {
+                        // Si no existe, asegurarse de que la caja esté vacía
+                        mat.element.value = "";
                     }
                 }
             } catch (error) {
@@ -846,7 +877,9 @@
                         }
                     } else {
                         // Si la respuesta no es OK, intentar de nuevo con backoff
-                        throw new Error(`Error ${response.status}: ${await response.text()}`);
+                        const errorText = await response.text();
+                        console.error(`Error ${response.status}: ${errorText}`);
+                        throw new Error(`Error ${response.status}: ${errorText}`);
                     }
                 } catch (error) {
                     console.error(`Intento ${retries + 1} fallido:`, error);
@@ -1007,8 +1040,19 @@
                 generateExamBtn.disabled = false;
                 return;
             }
+            
+            // --- MODIFICACIÓN: CHECK DE MATERIAL ---
+            if (!currentSubject) {
+                 showModal("Por favor, selecciona una materia primero.");
+                examLoader.style.display = 'none';
+                generateExamBtn.disabled = false;
+                examOutput.innerHTML = "<p class='text-gray-500'>Aquí aparecerán las preguntas generadas...</p>";
+                return;
+            }
+            // --- FIN MODIFICACIÓN ---
+
             if (!materials.syllabus && !materials.theory && !materials.experiences) {
-                showModal("No hay material cargado. Por favor, ve a la pestaña 'Material' y guarda contenido primero.");
+                showModal("No hay material cargado para esta materia. Por favor, ve a la pestaña 'Material' y guarda contenido primero.");
                 examLoader.style.display = 'none';
                 generateExamBtn.disabled = false;
                 examOutput.innerHTML = "<p class='text-gray-500'>Aquí aparecerán las preguntas generadas...</p>";
@@ -1292,8 +1336,82 @@
                     if (!acc[topic]) {
                         acc[topic] = [];
                     }
+                    acc[topic].push(doc); // <-- CORRECCIÓN
+                    return acc; // <-- CORRECCIÓN
+                }, {}); // <-- CORRECCIÓN
+
+                // Renderizar
+                renderSavedQuestions(groupedByTopic); // <-- CORRECCIÓN
+
+            }, (error) => { // <-- CORRECCIÓN
+                console.error("Error en listener de 'Repasar':", error);
+                reviewLoader.style.display = 'none';
+                reviewOutput.innerHTML = '<p class="text-red-500">Error al cargar las preguntas guardadas.</p>';
              });
          }
+
+        /**
+         * Renderiza las preguntas guardadas y agrupadas en la pestaña "Repasar".
+         * MODIFICADO para el estilo Anki (respuesta oculta, botones).
+         */
+        function renderSavedQuestions(groupedByTopic) {
+            reviewOutput.innerHTML = '';
+            
+            // Ordenar temas alfabéticamente
+            const sortedTopics = Object.keys(groupedByTopic).sort();
+
+            for (const topic of sortedTopics) {
+                const topicGroupEl = document.createElement('div');
+                topicGroupEl.className = 'topic-group';
+
+                const topicTitle = document.createElement('h3');
+                topicTitle.className = 'text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2';
+                topicTitle.textContent = topic;
+                topicGroupEl.appendChild(topicTitle);
+                
+                groupedByTopic[topic].forEach(doc => {
+                    const card = document.createElement('div');
+                    card.className = 'qa-card';
+                    card.dataset.id = doc.id; // Guardar ID en la tarjeta
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-qa-btn';
+                    deleteBtn.dataset.id = doc.id;
+                    deleteBtn.innerHTML = '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.502 0c-.34.052-.68.107-1.022.166m11.48 0c.342.052.682.107 1.022.166m-5.462 0a48.108 48.108 0 00-3.478-.397m-1.246 0A48.258 48.258 0 0012 3c-1.37 0-2.714.098-4.022.282m0 0C7.644 3.37 6.64 3.655 5.752 4.043" /></svg>';
+                    
+                    const questionP = document.createElement('p');
+                    questionP.className = 'question';
+                    questionP.textContent = doc.question;
+                    
+                    const answerP = document.createElement('p');
+                    answerP.className = 'answer';
+                    answerP.textContent = doc.answer;
+                    
+                    // --- Nuevo: UI de Anki ---
+                    const showAnswerBtn = document.createElement('button');
+                    showAnswerBtn.className = 'show-answer-btn';
+                    showAnswerBtn.textContent = 'Mostrar Respuesta';
+                    
+                    const ratingControls = document.createElement('div');
+                    ratingControls.className = 'rating-controls';
+                    ratingControls.innerHTML = `
+                        <button class="rate-btn" data-rating="hard" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Difícil</button>
+                        <button class="rate-btn" data-rating="good" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Bien</button>
+                        <button class="rate-btn" data-rating="easy" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Fácil</button>
+                    `;
+                    // --- Fin de UI de Anki ---
+
+                    card.appendChild(deleteBtn);
+                    card.appendChild(questionP);
+                    card.appendChild(answerP); // La respuesta (oculta por CSS)
+                    card.appendChild(ratingControls); // Controles (ocultos por CSS)
+                    card.appendChild(showAnswerBtn); // Botón para mostrar
+                    topicGroupEl.appendChild(card);
+                });
+
+                reviewOutput.appendChild(topicGroupEl);
+            }
+        }
 
         // --- FUNCIONES DE REPASO FALTANTES (Añadidas de nuevo) ---
 
@@ -1403,3 +1521,67 @@
         
          async function handleGenerateRanking() {
             // ... (Sin cambios, esta función es la misma)
+            rankingLoader.style.display = 'block';
+            generateRankingBtn.disabled = true;
+            rankingOutput.textContent = "Analizando experiencias...";
+
+            const materials = await getAllMaterials();
+            if (!materials) {
+                rankingLoader.style.display = 'none';
+                generateRankingBtn.disabled = false;
+                return;
+            }
+
+            // --- MODIFICACIÓN: CHECK DE MATERIAL ---
+            if (!currentSubject) {
+                 showModal("Por favor, selecciona una materia primero.");
+                rankingLoader.style.display = 'none';
+                generateRankingBtn.disabled = false;
+                rankingOutput.innerHTML = '<p class="text-gray-500">Aquí aparecerá el ranking de temas...</p>';
+                return;
+            }
+            // --- FIN MODIFICACIÓN ---
+
+            if (!materials.experiences) {
+                showModal("No se han cargado 'Experiencias de Exámenes' para esta materia. Esta función necesita ese material para analizar las frecuencias.");
+                rankingLoader.style.display = 'none';
+                generateRankingBtn.disabled = false;
+                rankingOutput.innerHTML = '<p class="text-gray-500">Aquí aparecerá el ranking de temas...</p>';
+                return;
+            }
+
+            const systemPrompt = "Eres un asistente de análisis de datos educativos. Tu trabajo es analizar transcripciones de experiencias de exámenes orales y encontrar patrones de frecuencia.";
+            
+            const userQuery = `
+                Analiza las siguientes experiencias de exámenes orales:
+                --- EXPERIENCIAS PASADAS ---
+                ${materials.experiences}
+                --- FIN EXPERIENCIAS ---
+                --- PLAN DE ESTUDIO (para contexto de nombres de temas) ---
+                ${materials.syllabus || "No proporcionado."}
+                --- FIN PLAN DE ESTUDIO ---
+                Tu tarea es identificar y generar un ranking de los temas preguntados con MÁS frecuencia.
+                La lista debe ser clara, ordenada y concisa, del tema más frecuente al menos frecuente.
+                Devuelve solo la lista ordenada.
+            `;
+
+            try {
+                const result = await callGemini(systemPrompt, userQuery);
+                rankingOutput.textContent = result;
+            } catch (error)
+                {
+                console.error("Error al generar ranking:", error);
+                showModal(`Error al comunicarse con la IA: ${error.message}`);
+                rankingOutput.textContent = "Ocurrió un error al generar el ranking.";
+            } finally {
+                rankingLoader.style.display = 'none';
+                generateRankingBtn.disabled = false;
+            }
+        }
+
+        // --- INICIAR LA APLICACIÓN ---
+        initializeFirebase();
+
+    </script>
+</body>
+</html>
