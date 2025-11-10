@@ -171,6 +171,32 @@
 </head>
 <body class="bg-gray-100 text-gray-800">
 
+    <!-- NUEVO: Modal de ID de Sincronización -->
+    <div id="sync-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div class="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-gray-800">Configurar Sincronización</h3>
+            <p class="mt-3 text-base text-gray-600">
+                Para sincronizar tus datos (materias, repasos) entre dispositivos, usa el mismo ID en todos ellos.
+            </p>
+            
+            <div class="mt-6">
+                <label for="sync-id-input" class="block text-sm font-medium text-gray-700">Pega tu ID de Sincronización existente:</label>
+                <input type="text" id="sync-id-input" class="w-full mt-1 p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <button id="save-sync-id" class="mt-3 w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none">
+                    Guardar y Usar este ID
+                </button>
+            </div>
+            
+            <div class="mt-6 border-t pt-4">
+                <p class="text-gray-600">O si este es tu primer dispositivo:</p>
+                <button id="generate-sync-id" class="mt-3 w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none">
+                    Generar un Nuevo ID
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- FIN MODAL -->
+
     <!-- Contenedor principal -->
     <div class="max-w-6xl mx-auto p-4 sm:p-8">
         
@@ -178,9 +204,26 @@
         <header class="mb-8 bg-white shadow-lg rounded-xl p-6 sm:p-8">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Simulador de Examen Oral</h1>
             <p class="text-lg text-gray-600">Entrena para tus exámenes con IA. Carga material, genera preguntas y guarda tus respuestas.</p>
+            
+            <!-- NUEVO: Selector de Materia -->
+            <div class="mt-6 border-t border-gray-200 pt-4">
+                <label for="subject-selector" class="block text-base font-semibold text-gray-800 mb-2">Materia Actual:</label>
+                <div class="flex flex-col sm:flex-row sm:space-x-2">
+                    <select id="subject-selector" class="w-full sm:w-1/2 p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="">-- Cargar Materia --</option>
+                        <!-- Las materias se cargarán aquí -->
+                    </select>
+                    <input type="text" id="new-subject-name" placeholder="Nombre de nueva materia" class="mt-2 sm:mt-0 w-full sm:w-1/2 p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <button id="add-subject-btn" class="mt-2 sm:mt-0 px-5 py-2.5 bg-gray-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-gray-700 transition-all">
+                        Crear
+                    </button>
+                </div>
+            </div>
+            <!-- FIN NUEVO -->
+            
             <!-- Muestra el ID de usuario para colaboración (requerido) -->
-            <div class="mt-3 text-xs text-gray-500">
-                User ID: <span id="user-id" class="font-mono bg-gray-100 p-1 rounded">Cargando...</span>
+            <div id="sync-id-display" class="mt-3 text-xs text-gray-500" style="display: none;">
+                User ID (Sincronización): <span id="user-id" class="font-mono bg-gray-100 p-1 rounded">Cargando...</span>
             </div>
         </header>
 
@@ -325,14 +368,20 @@
             query,      // <- Nuevo
             onSnapshot, // <- Nuevo
             deleteDoc,   // <- Nuevo
-            updateDoc   // <- Nuevo
+-            updateDoc   // <- Nuevo
++            updateDoc,   // <- Nuevo
++            getDocs     // <- Nuevo
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+ 
         // --- VARIABLES GLOBALES ---
-        let db, auth, appId, userId;
-        let currentTab = 'tab-material';
+-        let db, auth, appId, userId;
+-        let currentTab = 'tab-material';
++        let db, auth, appId, userId;
++        let currentTab = 'tab-material';
++        let currentSubject = ''; // NUEVO: Materia seleccionada
++        let allSubjects = new Set(); // NUEVO: Lista de materias
         let savedQuestionsUnsubscribe = null; // Para el listener de onSnapshot
-
+ 
         // --- ELEMENTOS DEL DOM ---
         const tabButtons = {
             'tab-material': document.getElementById('tab-material-btn'),
@@ -371,8 +420,11 @@
         const reviewOutput = document.getElementById('review-output');
         const reviewDueCount = document.getElementById('review-due-count');
         const reviewFutureCount = document.getElementById('review-future-count');
-
+ 
         // General
++        const subjectSelector = document.getElementById('subject-selector'); // NUEVO
++        const newSubjectName = document.getElementById('new-subject-name'); // NUEVO
++        const addSubjectBtn = document.getElementById('add-subject-btn'); // NUEVO
         const userIdSpan = document.getElementById('user-id');
         const errorModal = document.getElementById('error-modal');
         const errorMessage = document.getElementById('error-message');
@@ -417,75 +469,77 @@
         async function setupAuth() {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    userId = user.uid;
-                    userIdSpan.textContent = userId;
+                    // La autenticación anónima (user.uid) funcionó.
+                    // Ahora, buscamos el ID de SINCRONIZACIÓN (datos).
                     
-                    // Usuario autenticado, cargar su material
-                    await loadMaterialFromFirestore();
-                    setupUIListeners();
+                    let syncId = localStorage.getItem('my_sync_userId');
                     
-                    // Iniciar el listener para preguntas guardadas
-                    setupSavedQuestionsListener(); 
+                    if (syncId) {
+                        // ¡Perfecto! Ya tenemos un ID de sincronización guardado.
+                        userId = syncId; // Usamos este ID para TODAS las rutas de datos.
+                        userIdSpan.textContent = userId;
+                        
+                        document.getElementById('sync-id-display').style.display = 'block';
+                        document.getElementById('sync-modal').style.display = 'none';
 
-                } else {
-                    // Limpiar listener si el usuario se desloguea
-                    if (savedQuestionsUnsubscribe) {
-                        savedQuestionsUnsubscribe();
-                        savedQuestionsUnsubscribe = null;
+                        // Cargar lista de materias
+                        await loadUserSubjects(); 
+                        // Configurar listeners de UI
+                        setupUIListeners();
+                        
+                    } else {
+                        // Es la primera vez en este dispositivo o se borró el localStorage.
+                        // Mostramos el modal para que elija.
+                        document.getElementById('sync-id-display').style.display = 'none';
+                        document.getElementById('sync-modal').style.display = 'flex';
                     }
+                    
+                } else {
+                    // Usuario no autenticado (raro, pero podría pasar)
+                    console.log("Usuario no autenticado.");
                 }
             });
 
             try {
                 // --- INICIO DE LA MODIFICACIÓN ---
-                // Como no estamos en el entorno de la plataforma,
-                // solo usamos la autenticación anónima.
+                // Para GitHub Pages, SIEMPRE usamos autenticación anónima.
+                // Esto es solo para cumplir la regla de seguridad "request.auth != null".
                 await signInAnonymously(auth);
                 // --- FIN DE LA MODIFICACIÓN ---
             } catch (error) {
                 console.error("Error de autenticación:", error);
-                showModal("Error de autenticación. No podrás guardar ni cargar material.");
+                showModal("Error de autenticación. La app no funcionará.");
             }
         }
 
-        // --- LÓGICA DE UI (PESTAÑAS Y MODAL) ---
-
         function switchTab(newTabId) {
-            currentTab = newTabId;
-            
-            Object.keys(tabButtons).forEach(tabId => {
-                const btn = tabButtons[tabId];
-                const panel = tabPanels[tabId];
-                
-                if (tabId === newTabId) {
-                    btn.classList.add('active');
-                    panel.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                    panel.classList.remove('active');
-                }
-            });
-        }
-
-        function showModal(message) {
-            errorMessage.textContent = message;
-            errorModal.style.display = 'flex';
-            setTimeout(() => errorModal.style.opacity = 1, 10);
-        }
-
-        function hideModal() {
-            errorModal.style.opacity = 0;
-            setTimeout(() => errorModal.style.display = 'none', 300);
-        }
-
-        function setupUIListeners() {
-            // Navegación de pestañas
             Object.keys(tabButtons).forEach(tabId => {
                 tabButtons[tabId].addEventListener('click', () => switchTab(tabId));
             });
             
             // Modal
             closeModalBtn.addEventListener('click', hideModal);
+            
+            // NUEVO: Listeners de Materia
+            addSubjectBtn.addEventListener('click', handleAddSubject);
+            subjectSelector.addEventListener('change', handleSubjectChange);
+
+            // NUEVO: Listeners del Modal de Sincronización
+            document.getElementById('save-sync-id').addEventListener('click', () => {
+                const inputId = document.getElementById('sync-id-input').value.trim();
+                if (inputId) {
+                    localStorage.setItem('my_sync_userId', inputId);
+                    window.location.reload(); // Recargar para aplicar el ID
+                } else {
+                    showModal("Por favor, introduce un ID válido.");
+                }
+            });
+            
+            document.getElementById('generate-sync-id').addEventListener('click', () => {
+                const newId = crypto.randomUUID(); // Genera un ID único
+                localStorage.setItem('my_sync_userId', newId);
+                window.location.reload(); // Recargar para aplicar el ID
+            });
             
             // Pestaña Material
             saveMaterialBtn.addEventListener('click', handleSaveMaterial);
@@ -523,6 +577,113 @@
             });
         }
         
+        // --- NUEVAS FUNCIONES PARA MANEJO DE MATERIAS (Faltaban en tu código) ---
+
+        /**
+         * Carga la lista de materias del usuario desde Firestore.
+         */
+        async function loadUserSubjects() {
+            if (!userId) return;
+            const subjectsRef = collection(db, 'artifacts', appId, 'users', userId, 'subjects');
+            try {
+                const querySnapshot = await getDocs(subjectsRef);
+                allSubjects = new Set();
+                querySnapshot.forEach((doc) => {
+                    allSubjects.add(doc.id); // El ID del doc es el nombre de la materia
+                });
+                renderSubjectSelector();
+            } catch (error) {
+                console.error("Error cargando materias:", error);
+                showModal("No se pudieron cargar tus materias.");
+            }
+        }
+
+        /**
+         * Rellena el <select> de materias.
+         */
+        function renderSubjectSelector() {
+            subjectSelector.innerHTML = '<option value="">-- Selecciona una Materia --</option>';
+            allSubjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject;
+                option.textContent = subject;
+                subjectSelector.appendChild(option);
+            });
+        }
+
+        /**
+         * Maneja el clic para crear una nueva materia.
+         */
+        async function handleAddSubject() {
+            const newSubject = newSubjectName.value.trim();
+            if (!newSubject) {
+                showModal("El nombre de la materia no puede estar vacío.");
+                return;
+            }
+            if (allSubjects.has(newSubject)) {
+                showModal("Esa materia ya existe.");
+                return;
+            }
+
+            try {
+                // Crear un doc placeholder para que la materia "exista"
+                const subjectDocRef = doc(db, 'artifacts', appId, 'users', userId, 'subjects', newSubject);
+                await setDoc(subjectDocRef, { createdAt: serverTimestamp() });
+                
+                allSubjects.add(newSubject);
+                renderSubjectSelector();
+                subjectSelector.value = newSubject;
+                newSubjectName.value = '';
+                
+                // Disparar el cambio de materia
+                handleSubjectChange(); 
+
+            } catch (error) {
+                console.error("Error creando materia:", error);
+                showModal("No se pudo crear la materia.");
+            }
+        }
+
+        /**
+         * Se dispara cuando el usuario cambia la materia en el <select>.
+         */
+        async function handleSubjectChange() {
+            currentSubject = subjectSelector.value;
+            if (!currentSubject) {
+                clearMaterialUI();
+                clearReviewUI();
+                return;
+            }
+            
+            // Ahora que tenemos materia, cargamos todo
+            await loadMaterialFromFirestore();
+            setupSavedQuestionsListener(); // Esto se reconfigura y se dispara
+        }
+
+        /**
+         * Limpia los textareas de material.
+         */
+        function clearMaterialUI() {
+            syllabusText.value = '';
+            theoryText.value = '';
+            experiencesText.value = '';
+            saveStatus.textContent = '';
+        }
+
+        /**
+         * Limpia la pestaña de repaso y detiene el listener.
+         */
+        function clearReviewUI() {
+            if (savedQuestionsUnsubscribe) {
+                savedQuestionsUnsubscribe();
+                savedQuestionsUnsubscribe = null;
+            }
+            reviewOutput.innerHTML = '<p class="text-gray-500">Selecciona una materia para ver las preguntas.</p>';
+            reviewDueCount.textContent = '0';
+            reviewFutureCount.textContent = '0';
+        }
+
+
         // --- LÓGICA DE FIRESTORE (MATERIAL) ---
 
         async function getMaterialRef(materialType) {
@@ -530,12 +691,24 @@
                 showModal("Usuario no autenticado. No se puede operar.");
                 return null;
             }
-            // Guarda el material como privado para el usuario
-            return doc(db, 'artifacts', appId, 'users', userId, 'materials', materialType);
+            // --- MODIFICACIÓN (Corregido error de ruta) ---
+            if (!currentSubject) {
+                // No mostramos modal, solo prevenimos la acción
+                console.warn("Intento de acceso a material sin materia seleccionada.");
+                return null;
+            }
+            // La ruta ahora incluye la materia
+            return doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'materials', materialType);
+            // --- FIN MODIFICACIÓN ---
         }
 
         async function handleSaveMaterial() {
-            // ... (Sin cambios, esta función es la misma)
+            // --- NUEVO CHECK (Corregido) ---
+            if (!currentSubject) {
+                showModal("Por favor, selecciona o crea una materia primero.");
+                return;
+            }
+            // --- FIN CHECK ---
             saveStatus.textContent = "Guardando...";
             saveMaterialBtn.disabled = true;
 
@@ -566,7 +739,12 @@
         }
         
         async function loadMaterialFromFirestore() {
-            // ... (Sin cambios, esta función es la misma)
+            // --- NUEVO CHECK (Corregido) ---
+            if (!currentSubject) {
+                clearMaterialUI();
+                return;
+            }
+            // --- FIN CHECK ---
             try {
                 const materialsToLoad = [
                     { id: 'syllabus', element: syllabusText },
@@ -627,8 +805,12 @@
         // --- LÓGICA DE IA (GEMINI API) ---
         
         async function callGemini(systemPrompt, userQuery, generationConfig = null) {
-            // ... (Sin cambios, esta función es la misma)
-            const apiKey = "AIzaSyA1RYWX9v5UFVVGVcI9KKyPXK3BDnIRkqw"; // La API key se inyecta automáticamente
+            // --- MODIFICACIÓN ---
+            // La API key se inyecta automáticamente en este entorno.
+            // Se elimina la clave hardcodeada.
+            const apiKey = ""; 
+            // --- FIN DE LA MODIFICACIÓN ---
+            
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -1016,6 +1198,13 @@
             const question = button.dataset.question;
             const answer = button.dataset.answer;
 
+            // --- NUEVO CHECK ---
+            if (!currentSubject) {
+                showModal("Por favor, selecciona una materia antes de guardar.");
+                return;
+            }
+            // --- FIN CHECK ---
+
             if (!topic || !question || !answer) {
                 showModal("Error: no se pudo obtener la información para guardar.");
                 return;
@@ -1026,7 +1215,9 @@
 
             try {
                 // Referencia a la nueva colección
-                const savedQuestionsRef = collection(db, 'artifacts', appId, 'users', userId, 'saved_questions');
+                // --- MODIFICACIÓN DE RUTA ---
+                const savedQuestionsRef = collection(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions');
+                // --- FIN MODIFICACIÓN ---
                 
                 await addDoc(savedQuestionsRef, {
                     topic: topic,
@@ -1056,12 +1247,19 @@
             if (savedQuestionsUnsubscribe) {
                 savedQuestionsUnsubscribe(); // Detener listener anterior si existe
             }
-            if (!userId) return;
+            // --- MODIFICACIÓN (Corregida) ---
+            if (!userId || !currentSubject) {
+                clearReviewUI();
+                return;
+            }
+            // --- FIN MODIFICACIÓN ---
 
             reviewLoader.style.display = 'block';
             reviewOutput.innerHTML = '';
 
-            const q = query(collection(db, 'artifacts', appId, 'users', userId, 'saved_questions'));
+            // --- MODIFICACIÓN DE RUTA (Corregida) ---
+            const q = query(collection(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions'));
+            // --- FIN MODIFICACIÓN DE RUTA ---
             
             savedQuestionsUnsubscribe = onSnapshot(q, (snapshot) => {
                 reviewLoader.style.display = 'none';
@@ -1094,82 +1292,10 @@
                     if (!acc[topic]) {
                         acc[topic] = [];
                     }
-                    acc[topic].push(doc);
-                    return acc;
-                }, {}); // <-- Aquí estaba el error, faltaba cerrar esto.
+             });
+         }
 
-                // Renderizar
-                renderSavedQuestions(groupedByTopic); // <-- Y faltaba esta llamada.
-
-            }, (error) => { // <-- Este es el manejador de error, estaba en el lugar incorrecto.
-                console.error("Error en listener de 'Repasar':", error);
-                reviewLoader.style.display = 'none';
-                reviewOutput.innerHTML = '<p class="text-red-500">Error al cargar las preguntas guardadas.</p>';
-            });
-        }
-
-        /**
-         * Renderiza las preguntas guardadas y agrupadas en la pestaña "Repasar".
-         * MODIFICADO para el estilo Anki (respuesta oculta, botones).
-         */
-        function renderSavedQuestions(groupedByTopic) {
-            reviewOutput.innerHTML = '';
-            
-            // Ordenar temas alfabéticamente
-            const sortedTopics = Object.keys(groupedByTopic).sort();
-
-            for (const topic of sortedTopics) {
-                const topicGroupEl = document.createElement('div');
-                topicGroupEl.className = 'topic-group';
-
-                const topicTitle = document.createElement('h3');
-                topicTitle.className = 'text-2xl font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2';
-                topicTitle.textContent = topic;
-                topicGroupEl.appendChild(topicTitle);
-                
-                groupedByTopic[topic].forEach(doc => {
-                    const card = document.createElement('div');
-                    card.className = 'qa-card';
-                    card.dataset.id = doc.id; // Guardar ID en la tarjeta
-                    
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'delete-qa-btn';
-                    deleteBtn.dataset.id = doc.id;
-                    deleteBtn.innerHTML = '<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.502 0c-.34.052-.68.107-1.022.166m11.48 0c.342.052.682.107 1.022.166m-5.462 0a48.108 48.108 0 00-3.478-.397m-1.246 0A48.258 48.258 0 0012 3c-1.37 0-2.714.098-4.022.282m0 0C7.644 3.37 6.64 3.655 5.752 4.043" /></svg>';
-                    
-                    const questionP = document.createElement('p');
-                    questionP.className = 'question';
-                    questionP.textContent = doc.question;
-                    
-                    const answerP = document.createElement('p');
-                    answerP.className = 'answer';
-                    answerP.textContent = doc.answer;
-                    
-                    // --- Nuevo: UI de Anki ---
-                    const showAnswerBtn = document.createElement('button');
-                    showAnswerBtn.className = 'show-answer-btn';
-                    showAnswerBtn.textContent = 'Mostrar Respuesta';
-                    
-                    const ratingControls = document.createElement('div');
-                    ratingControls.className = 'rating-controls';
-                    ratingControls.innerHTML = `
-                        <button class="rate-btn" data-rating="hard" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Difícil</button>
-                        <button class="rate-btn" data-rating="good" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Bien</button>
-                        <button class="rate-btn" data-rating="easy" data-step="${doc.reviewStep || 0}" data-id="${doc.id}">Fácil</button>
-                    `;
-                    // --- Fin de UI de Anki ---
-
-                    card.appendChild(deleteBtn);
-                    card.appendChild(questionP);
-                    card.appendChild(answerP); // La respuesta (oculta por CSS)
-                    card.appendChild(ratingControls); // Controles (ocultos por CSS)
-                    card.appendChild(showAnswerBtn); // Botón para mostrar
-                    topicGroupEl.appendChild(card);
-                });
-
-                reviewOutput.appendChild(topicGroupEl);
-            }
-        }
+        // --- FUNCIONES DE REPASO FALTANTES (Añadidas de nuevo) ---
 
         /**
          * Manejador para borrar una Q&A guardada.
@@ -1178,13 +1304,12 @@
             const id = button.dataset.id;
             if (!id) return;
             
-            // No hay confirmación para cumplir la regla de "no confirm()"
-            // Se borra directamente.
-            
             button.disabled = true;
             
             try {
-                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'saved_questions', id);
+                // --- MODIFICACIÓN DE RUTA ---
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions', id);
+                // --- FIN MODIFICACIÓN ---
                 await deleteDoc(docRef);
                 // El listener onSnapshot se encargará de actualizar la UI
             } catch (error) {
@@ -1257,7 +1382,9 @@
                 const { nextStep, nextReviewDate } = getNextReview(currentStep, rating);
                 
                 // 2. Actualizar el documento en Firestore
-                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'saved_questions', id);
+                // --- MODIFICACIÓN DE RUTA ---
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'subjects', currentSubject, 'saved_questions', id);
+                // --- FIN MODIFICACIÓN ---
                 await updateDoc(docRef, {
                     reviewStep: nextStep,
                     nextReviewDate: nextReviewDate // Firestore maneja la conversión de Date a Timestamp
@@ -1274,59 +1401,5 @@
             }
         }
         
-        async function handleGenerateRanking() {
+         async function handleGenerateRanking() {
             // ... (Sin cambios, esta función es la misma)
-            rankingLoader.style.display = 'block';
-            generateRankingBtn.disabled = true;
-            rankingOutput.textContent = "Analizando experiencias...";
-
-            const materials = await getAllMaterials();
-            if (!materials) {
-                rankingLoader.style.display = 'none';
-                generateRankingBtn.disabled = false;
-                return;
-            }
-
-            if (!materials.experiences) {
-                showModal("No se han cargado 'Experiencias de Exámenes'. Esta función necesita ese material para analizar las frecuencias.");
-                rankingLoader.style.display = 'none';
-                generateRankingBtn.disabled = false;
-                rankingOutput.innerHTML = '<p class="text-gray-500">Aquí aparecerá el ranking de temas...</p>';
-                return;
-            }
-
-            const systemPrompt = "Eres un asistente de análisis de datos educativos. Tu trabajo es analizar transcripciones de experiencias de exámenes orales y encontrar patrones de frecuencia.";
-            
-            const userQuery = `
-                Analiza las siguientes experiencias de exámenes orales:
-                --- EXPERIENCIAS PASADAS ---
-                ${materials.experiences}
-                --- FIN EXPERIENCIAS ---
-                --- PLAN DE ESTUDIO (para contexto de nombres de temas) ---
-                ${materials.syllabus || "No proporcionado."}
-                --- FIN PLAN DE ESTUDIO ---
-                Tu tarea es identificar y generar un ranking de los temas preguntados con MÁS frecuencia.
-                La lista debe ser clara, ordenada y concisa, del tema más frecuente al menos frecuente.
-                Devuelve solo la lista ordenada.
-            `;
-
-            try {
-                const result = await callGemini(systemPrompt, userQuery);
-                rankingOutput.textContent = result;
-            } catch (error) {
-                console.error("Error al generar ranking:", error);
-                showModal(`Error al comunicarse con la IA: ${error.message}`);
-                rankingOutput.textContent = "Ocurrió un error al generar el ranking.";
-            } finally {
-                rankingLoader.style.display = 'none';
-                generateRankingBtn.disabled = false;
-            }
-        }
-
-        // --- INICIAR LA APLICACIÓN ---
-        initializeFirebase();
-
-    </script>
-</body>
-</html>
-
